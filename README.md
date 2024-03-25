@@ -12,6 +12,9 @@ This assignment focuses on leveraging SQL skills to analyze historical credit ca
    
 3. **Data Analysis**: Utilize SQL queries to analyze the data and uncover trends indicative of fraudulent transactions.
 
+## ERD Diagram
+![ERD Diagram](ERD%20diagram.PNG)
+
 
 ## SQL TABLE CREATION QUERIES
 ```sql
@@ -59,27 +62,14 @@ CREATE TABLE transaction (
     FOREIGN KEY (id_merchant) REFERENCES merchant(id)
 );
 
--- Table for merchants
-CREATE TABLE merchant (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    id_merchant_category INT,
-    FOREIGN KEY (id_merchant_category) REFERENCES merchant_category(id)
-);
+-- isolate (or group) the transactions
+CREATE VIEW cardholder_transactions AS
+SELECT ch.id AS cardholder_id, c.card AS credit_card, t.id AS transaction_id, t.amount
+FROM card_holder ch
+JOIN credit_card c ON ch.id = c.cardholder_id
+JOIN transaction t ON c.card = t.card;
 
--- Table for transactions
-CREATE TABLE transaction (
-    id SERIAL PRIMARY KEY,
-    date TIMESTAMP NOT NULL,
-    amount FLOAT NOT NULL,
-    card VARCHAR(20),
-    id_merchant INT,
-    FOREIGN KEY (card) REFERENCES credit_card(card),
-    FOREIGN KEY (id_merchant) REFERENCES merchant(id)
-);
-
---How can you isolate (or group) the transactions of each cardholder?
--- To isolate or group the transactions, I will use a view to encapsulate the logic for counting the transactions less than $2.00 per cardholder
+--transactions less than $2.00 per cardholder
 CREATE VIEW small_transactions_per_cardholder AS
 SELECT ch.name AS cardholder_name, cc.card AS credit_card_number, COUNT(t.id) AS num_transactions_less_than_2
 FROM card_holder ch
@@ -102,6 +92,29 @@ DESC LIMIT 100;
 --query the top_transactions_7_to_9 view to get the data
 SELECT *
 FROM top_transactions_7_to_9;
+
+-- Create a view to represent counts of fraudulent transactions (less than 2.00USD) across time frames
+CREATE VIEW fraudulent_transactions_counts AS
+SELECT
+    '7:00 am to 9:00 am' AS time_frame,
+    COUNT(*) AS count
+FROM
+    transaction
+WHERE
+    date_part('hour', date) >= 7 
+    AND date_part('hour', date) < 9
+    AND amount < 2
+UNION
+SELECT
+    'Rest of the day' AS time_frame,
+    COUNT(*) AS count
+FROM
+    transaction
+WHERE
+    (date_part('hour', date) < 7 OR date_part('hour', date) >= 9)
+    AND amount < 2;
+
+SELECT * FROM fraudulent_transactions_counts
 
 -- Top 5 merchant prone to hacking
 CREATE VIEW merchants_prone_to_hacking AS
@@ -172,13 +185,19 @@ FROM top_transactions_7_to_9;
 
 
 ### Do you see any anomalous transactions that could be fraudulent?
-YES!. To identify anomalous transactions that could potentially be fraudulent, I would typically consider transactions that are repetitive and deviate from the typical spending pattern of the cardholder. I would flag repetitive transactions from card "4761049645711555811" as potential fraudulent activity given the amounts involved (1894, 1060 and 1017) and the short time period. I would also flag card "4319653513507"
+YES!. To identify anomalous transactions that could potentially be fraudulent, I would typically consider transactions that are repetitive and deviate from the typical spending pattern of the cardholder. I would flag multiple repetitive transactions from card "4761049645711555811" as potential fraudulent activity given the various amounts involved (1894, 1060, 1017, etc) and the short time period. I would also flag card "4319653513507"
 
 ### Is there a higher number of fraudulent transactions made during this time frame versus the rest of the day?
-YES
+Given that fraudulent activities here are defined as activities less than 2.00 USD, There are more activities spread through the day than this timeframe from the database query.
+
+| Time Frame          | Count |
+|---------------------|-------|
+| 7:00 am to 9:00 am | 30    |
+| Rest of the day     | 320   |
+
 
 ### If you answered yes to the previous question, explain why you think there might be fraudulent transactions during this time frame.
-Most fraudulent activities are automated, and early morning hours may offer less oversight. Cardholders may be less likely to notice or question small fraudulent transactions during busy morning routines, making them more susceptible to fraud during this time frame.
+Most fraudulent activities are automated, and early morning hours may offer less oversight. Cardholders may be less likely to notice or question fraudulent transactions during busy morning routines, making them more susceptible to fraud during this time frame.
 
 ### What are the top 5 merchants prone to being hacked using small transactions?
 
